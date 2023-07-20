@@ -74,9 +74,9 @@ public:
             XBT_INFO("Received a workunit.");
 
             XBT_INFO("Starting MPI Job on %ld compute nodes.", cluster_hosts.size());
-            auto barrier = simgrid::s4u::Barrier::create(1 + cluster_hosts.size());
-            SMPI_app_instance_start(("MPI_Job_" + sg4::this_actor::get_name()).c_str(),
-                                    [barrier, work_unit_spec, db_host, db_disk]() {
+            std::string smpi_program_name = "MPI_Job_" + sg4::this_actor::get_name();
+            SMPI_app_instance_start(smpi_program_name.c_str(),
+                                    [work_unit_spec, db_host, db_disk]() {
                                         MPI_Init();
                                         int num_procs, my_rank;
                                         MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
@@ -105,10 +105,10 @@ public:
                                         if (my_rank == 0) {
                                             XBT_INFO("MPI Job finishing");
                                         }
-                                        barrier->wait();
                                     },
                                     cluster_hosts);
-            barrier->wait();
+
+            SMPI_app_instance_join(smpi_program_name);
             XBT_INFO("MPI Job on %ld compute nodes completed.", cluster_hosts.size());
             delete work_unit_spec;
         }
