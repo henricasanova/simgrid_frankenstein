@@ -175,7 +175,7 @@ int main(int argc, char **argv) {
     const sg4::Link* l = root->create_link("link1-2", 200*MB)->set_latency(1e-3)->seal();
     sg4::LinkInRoute internet{l};
 
-    // Create two clusters
+    // Create three clusters
     std::vector<int> cluster_sizes = {16, 32, 40};
     for (int i=0; i < cluster_sizes.size(); i++) {
         auto cluster = create_cluster(root, ".cluster" + std::to_string(i) + ".org", cluster_sizes.at(i));
