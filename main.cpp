@@ -136,12 +136,12 @@ create_cluster(const sg4::NetZone* root, const std::string& cluster_suffix, cons
     /* create link */
     sg4::LinkInRoute link{cluster->create_link(hostname + "_link", "10Gbps")->set_latency("10us")};
     /* add route between host and any other host */
-    cluster->add_route(host->get_netpoint(), nullptr, nullptr, nullptr, {link, backbone});
+    cluster->add_route(host, nullptr, {link, backbone});
   }
 
   /* create router */
   auto router = cluster->create_router("router" + cluster_suffix);
-
+  cluster->set_gateway(router);
   cluster->seal();
   return std::make_pair(cluster, router);
 }
@@ -155,12 +155,14 @@ int main(int argc, char** argv)
 
   // Create a coordinator zone/host
   auto coordinator_zone = sg4::create_full_zone("Coordinator")->set_parent(root);
-  auto coordinator_host = coordinator_zone->create_host("coordinator.org", "1Gf");
+  coordinator_zone->create_host("coordinator.org", "1Gf");
+  coordinator_zone->seal();
 
   // Create a database zone/host
   auto database_zone = sg4::create_full_zone("Database")->set_parent(root);
   auto database_host = database_zone->create_host("database.org", "1Gf");
   database_host->create_disk("db", "100MBps", "50MBps");
+  database_zone->seal();
 
   // Create a single link as a simple abstraction of the whole wide-area network
   sg4::LinkInRoute internet{root->create_link("internet", "200MBps")->set_latency("1ms")};
@@ -172,10 +174,8 @@ int main(int argc, char** argv)
   simgrid::kernel::routing::NetPoint* router;
   for (auto size : cluster_sizes) {
     std::tie(cluster, router) = create_cluster(root, ".cluster" + std::to_string(i++) + ".org", size);
-    root->add_route(coordinator_zone->get_netpoint(), cluster->get_netpoint(), coordinator_host->get_netpoint(), router,
-                    {internet});
-    root->add_route(database_zone->get_netpoint(), cluster->get_netpoint(), database_host->get_netpoint(), router,
-                    {internet});
+    root->add_route(coordinator_zone, cluster, {internet});
+    root->add_route(database_zone, cluster, {internet});
   }
 
   root->seal();
