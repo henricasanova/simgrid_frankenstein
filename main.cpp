@@ -119,31 +119,29 @@ public:
   }
 };
 
-static std::pair<sg4::NetZone*, simgrid::kernel::routing::NetPoint*>
-create_cluster(const sg4::NetZone* root, const std::string& cluster_suffix, const int num_hosts)
+static sg4::NetZone* create_cluster(const sg4::NetZone* root, const std::string& suffix, const int num_hosts)
 {
-  auto* cluster = sg4::create_star_zone("cluster" + cluster_suffix);
-  cluster->set_parent(root);
+  auto* cluster = sg4::create_star_zone("cluster" + suffix)->set_parent(root);
+
+  /* create gateway */
+  cluster->set_gateway(cluster->create_router("cluster" + suffix + "-router"));
 
   /* create the backbone link */
-  sg4::LinkInRoute backbone{cluster->create_link("backbone" + cluster_suffix, "100Gbps")->set_latency("100us")};
+  auto* backbone = cluster->create_link("backbone" + suffix, "100Gbps")->set_latency("100us");
 
   /* create all hosts and connect them to outside world */
   for (int i = 0; i < num_hosts; i++) {
-    std::string hostname = "host-" + std::to_string(i) + cluster_suffix;
+    std::string name = "host-" + std::to_string(i) + suffix;
     /* create host */
-    const auto* host = cluster->create_host(hostname, "1Gf");
+    const auto* host = cluster->create_host(name, "1Gf");
     /* create link */
-    sg4::LinkInRoute link{cluster->create_link(hostname + "_link", "10Gbps")->set_latency("10us")};
+    const auto* link = cluster->create_link(name + "_link", "10Gbps")->set_latency("10us");
     /* add route between host and any other host */
     cluster->add_route(host, nullptr, {link, backbone});
   }
 
-  /* create router */
-  auto router = cluster->create_router("router" + cluster_suffix);
-  cluster->set_gateway(router);
   cluster->seal();
-  return std::make_pair(cluster, router);
+  return cluster;
 }
 
 int main(int argc, char** argv)
@@ -160,20 +158,17 @@ int main(int argc, char** argv)
 
   // Create a database zone/host
   auto database_zone = sg4::create_full_zone("Database")->set_parent(root);
-  auto database_host = database_zone->create_host("database.org", "1Gf");
-  database_host->create_disk("db", "100MBps", "50MBps");
+  database_zone->create_host("database.org", "1Gf")->create_disk("db", "100MBps", "50MBps");
   database_zone->seal();
 
   // Create a single link as a simple abstraction of the whole wide-area network
-  sg4::LinkInRoute internet{root->create_link("internet", "200MBps")->set_latency("1ms")};
+  auto* internet = root->create_link("internet", "200MBps")->set_latency("1ms");
 
   // Create three clusters
   std::vector<int> cluster_sizes = {16, 32, 40};
-  int i                          = 0;
-  sg4::NetZone* cluster;
-  simgrid::kernel::routing::NetPoint* router;
+  int i = 0;
   for (auto size : cluster_sizes) {
-    std::tie(cluster, router) = create_cluster(root, ".cluster" + std::to_string(i++) + ".org", size);
+    auto* cluster = create_cluster(root, ".cluster" + std::to_string(i++) + ".org", size);
     root->add_route(coordinator_zone, cluster, {internet});
     root->add_route(database_zone, cluster, {internet});
   }
